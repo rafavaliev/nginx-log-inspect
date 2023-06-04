@@ -1,26 +1,26 @@
+import re
 from collections import Counter
 
 from src.etc import status_code_to_text
 
 from itertools import islice
 
-def unique_ips(ip_request_dict):
-    print('- - - Unique ip\'s - - -')
 
+def unique_ips(ip_request_dict):
     country_set = set()
     for ip in ip_request_dict:
         country_set.add(ip_request_dict[ip][0]["country"])
+    return len(ip_request_dict.keys())
 
-    print(f'Found {len(ip_request_dict.keys())} unique ip adresses from {len(country_set)} countries!')
 
 def common_countries(ip_request_dict):
     c = Counter([ip_request_dict[ip][0]["country"] for ip in ip_request_dict])
 
     n = 10
-    print('\n')
-    print(f'- - - Top {n} most common countries - - -')
+    res = {}
     for agent in c.most_common(n):
-        print(f'{agent[1]}\tunique ip\'s from {agent[0]}')
+        res[agent[1]] = agent[0]
+    return sorted(res.items(), key=lambda x: x[1], reverse=True)
 
 
 def common_user_agent(ip_request_dict):
@@ -32,10 +32,10 @@ def common_user_agent(ip_request_dict):
     c = Counter(agents)
 
     n = 10
-    print('\n')
-    print(f'- - - Top {n} most common user agents - - -')
+    res = {}
     for agent in c.most_common(n):
-        print(f'Requests: {agent[1]}\tUseragent: {agent[0]}')
+        res[agent[0]] = agent[1]
+    return sorted(res.items(), key=lambda x: x[1], reverse=True)
 
 
 def common_status_codes(ip_request_dict):
@@ -47,80 +47,36 @@ def common_status_codes(ip_request_dict):
     c = Counter(agents)
 
     n = 10
-    print('\n')
-    print(f'- - - Top {n} most common status codes - - -')
+    res = {}
     for agent in c.most_common(n):
-        print(
-            f'Requests: {agent[1]}\tStatuscode: {agent[0]} ->\t{status_code_to_text(int(agent[0]))}')
+        res[status_code_to_text(int(agent[0]))] = agent[1]
+    return sorted(res.items(), key=lambda x: x[1], reverse=True)
 
 
 def common_ip_adresses(ip_request_dict):
     n = 10
-    print('\n')
-    print(f'- - - Top {n} most common ip adresses - - -')
+    res = {}
     for ip in islice(ip_request_dict, n):
-        print(f'Requests: {len(ip_request_dict[ip])}\tIP: {ip}')
+        res[ip] = len(ip_request_dict[ip])
+    return res
 
 
-def common_urls_requested(ip_request_dict, ip=None,n=10):
+def common_urls_requested(ip_request_dict, ip=None, n=10):
     urls = []
     for ip_entry in ip_request_dict.items():
-        # log oncly specific ip
+        # log only specific ip
         if ip != None and ip_entry[0] != ip:
             continue
         urls += [message["url"] for message in ip_entry[1]]
 
     c = Counter(urls)
-    print('\n')
-    print(
-        f'- - - Top {n} most common urls requested {"by" if ip != None else ""} {ip if ip != None else ""}- - -')
+    res = {}
     for value in c.most_common(n):
-        print(f'Requests: {value[1]}\t Url: {value[0]}')
-
-
-def url_for_status_code(ip_request_dict, status_code):
-    urls = []
-    for ip_entry in ip_request_dict.items():
-
-        for message in ip_entry[1]:
-            if int(message["statuscode"]) != status_code:
-                continue
-
-            urls.append(message["url"])
-
-    c = Counter(urls)
-
-    n = 10
-    print('\n')
-    print(
-        f'- - - Top {n} most common urls for status code {status_code} -> {status_code_to_text(status_code)}- - -')
-    for value in c.most_common(n):
-        print(f'Requests:{value[1]}\tUrl: {value[0]}')
-
-
-def url_requested(ip_request_dict, url,shorten_useragents):
-    print('\n')
-    print(
-        f'- - - IP\'s that requested the url {url} - - -')
-
-    for ip in ip_request_dict:
-        for message in ip_request_dict[ip]:
-            if url in message["url"]:
-                country = message["country"]
-                url = message["url"]
-                
-                if shorten_useragents:
-                    agent = message["useragent"][:25]
-                else:
-                    agent = message["useragent"]
-
-                print(f'{ip} {country} {url} {agent}...')
-                break
-
+        res[value[0]] = value[1]
+    return sorted(res.items(), key=lambda x: x[1], reverse=True)
 
 
 def unique_url_counts(ip_request_dict, n=50):
-    print('\n')
     urls = []
 
     for ip in ip_request_dict:
@@ -128,12 +84,11 @@ def unique_url_counts(ip_request_dict, n=50):
             urls.append(message["url"])
 
     c = Counter(urls)
-    print('\n')
-    print(
-        f'- - - Top {n} most common requested urls. Overall {len(c.items())}- - -')
+    res = {}
     for value in c.most_common(n):
-        print(f'Requests:{value[1]}\tUrl: {value[0]}')
-    
+        res[value[0]] = value[1]
+    return res
+
 
 def ip_by_countries(ip_request_dict):
     country_dict = {}
@@ -144,9 +99,49 @@ def ip_by_countries(ip_request_dict):
             country_dict[country].append(ip_request_dict[ip])
         else:
             country_dict[country] = [ip_request_dict[ip]]
-    
-    for country in country_dict:
-        print(country)
-        for msg_arr in country_dict[country]:
-            print(f'{msg_arr[0]["ipaddress"]} Entries: {len(msg_arr)}')
-        print('-'*10)
+    return country_dict
+
+
+def specific_urls_requested(ip_request_dict, specific_urls):
+    n = 100
+    urls = []
+
+    # count all urls that are in the specific_urls list
+    for ip in ip_request_dict:
+        for message in ip_request_dict[ip]:
+            # trim url from space
+            message["url"] = message["url"].strip()
+
+            if message["url"] in specific_urls:
+                urls.append(message["url"])
+
+            # if specific url is a regex
+            for specific_url in specific_urls:
+                if not specific_url.startswith("regex:"):
+                    continue
+                # remove regex prefix
+                specific_url = specific_url[6:]
+                if re.match(specific_url, message["url"]):
+                    urls.append(specific_url)
+                    break
+
+    c = Counter(urls)
+    res = {}
+    for value in c.most_common(n):
+        res[value[0]] = value[1]
+    return sorted(res.items(), key=lambda x: x[1], reverse=True)
+
+
+def common_referrers(ip_log_messages_dict, n):
+    # Find top 10 refferers
+    refferer = []
+    for ip in ip_log_messages_dict:
+        for message in ip_log_messages_dict[ip]:
+            refferer.append(message['refferer'])
+
+    c = Counter(refferer)
+    res = {}
+    for value in c.most_common(n):
+        res[value[0]] = value[1]
+    return sorted(res.items(), key=lambda x: x[1], reverse=True)
+
